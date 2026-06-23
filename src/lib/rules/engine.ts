@@ -77,32 +77,57 @@ export function evaluate({ address, prev, balances, txs }: EvaluateInput): Alert
       });
     }
 
-    if (
-      rules.largeWithdrawal.enabled &&
-      tx.direction === 'out' &&
-      tx.amount > rules.largeWithdrawal.threshold
-    ) {
-      alerts.push({
-        ...base,
-        dedupKey: `${address.id}:large_withdrawal:${tx.hash}`,
-        rule: 'large_withdrawal',
-        severity: 'critical',
-        title: '대규모 출금 감지',
-        message: `${fmt(tx.amount)} ${tx.asset} 출금 (임계값 ${fmt(
-          rules.largeWithdrawal.threshold,
-        )} 초과) — ${tx.hash.slice(0, 12)}…`,
-        tx,
-      });
+    if (rules.largeWithdrawal.enabled && tx.direction === 'out') {
+      const { threshold, usdThreshold } = rules.largeWithdrawal;
+      const overNative = tx.amount > threshold;
+      const overUsd =
+        typeof usdThreshold === 'number' &&
+        typeof tx.usdValue === 'number' &&
+        tx.usdValue > usdThreshold;
+      if (overNative || overUsd) {
+        const usdPart =
+          typeof tx.usdValue === 'number' ? ` (≈$${fmt(tx.usdValue)})` : '';
+        const trigger = overUsd
+          ? `USD 임계값 $${fmt(usdThreshold!)} 초과`
+          : `임계값 ${fmt(threshold)} ${tx.asset} 초과`;
+        alerts.push({
+          ...base,
+          dedupKey: `${address.id}:large_withdrawal:${tx.hash}`,
+          rule: 'large_withdrawal',
+          severity: 'critical',
+          title: '대규모 출금 감지',
+          message: `${fmt(tx.amount)} ${tx.asset}${usdPart} 출금 (${trigger}) — ${tx.hash.slice(
+            0,
+            12,
+          )}…`,
+          tx,
+        });
+      }
     }
 
     if (rules.approval && (tx.type === 'approval' || tx.type === 'nft_approval')) {
+      const isNft = tx.type === 'nft_approval';
+      const spenderPart = tx.spender
+        ? ` spender ${tx.spender.slice(0, 10)}…${tx.spender.slice(-6)}`
+        : '';
+      const unlimitedPart = tx.unlimited
+        ? isNft
+          ? ' — 전체 컬렉션 위임(setApprovalForAll)!'
+          : ' — 무제한(unlimited) 승인!'
+        : '';
       alerts.push({
         ...base,
         dedupKey: `${address.id}:approval:${tx.hash}`,
         rule: 'approval',
         severity: 'critical',
-        title: tx.type === 'nft_approval' ? 'NFT 승인 감지' : '토큰 승인 감지',
-        message: `승인(approval) 트랜잭션이 감지되었습니다. 드레이너 위험을 확인하세요 — ${tx.hash.slice(
+        title: tx.unlimited
+          ? isNft
+            ? '⚠️ NFT 전체 위임 감지'
+            : '⚠️ 무제한 토큰 승인 감지'
+          : isNft
+            ? 'NFT 승인 감지'
+            : '토큰 승인 감지',
+        message: `승인(approval) 트랜잭션 감지${unlimitedPart}${spenderPart}. 드레이너 위험을 확인하세요 — ${tx.hash.slice(
           0,
           12,
         )}…`,

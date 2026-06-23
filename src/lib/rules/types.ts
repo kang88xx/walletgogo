@@ -3,8 +3,12 @@ import type { ChainId, NormalizedTx } from '@/lib/chains/types';
 export interface AlertRuleConfig {
   /** Alert when any native/token balance differs from the last snapshot. */
   balanceChange: boolean;
-  /** Alert on outgoing transfers above a per-address threshold. */
-  largeWithdrawal: { enabled: boolean; threshold: number };
+  /**
+   * Alert on outgoing transfers above a per-address threshold. `threshold` is
+   * in native asset units; `usdThreshold` (optional) fires on USD value when a
+   * price is available. Either trigger firing raises the alert.
+   */
+  largeWithdrawal: { enabled: boolean; threshold: number; usdThreshold?: number };
   /** Alert when a never-before-seen transaction hash appears. */
   newTransaction: boolean;
   /** Alert when an ERC20/NFT approval (or chain equivalent) is detected. */

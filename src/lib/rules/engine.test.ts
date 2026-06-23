@@ -132,6 +132,29 @@ describe('evaluate — large_withdrawal', () => {
     });
     expect(incoming.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(0);
   });
+
+  it('fires on USD threshold even when below the native threshold', () => {
+    const a = addr();
+    // High native threshold so only the USD trigger can fire.
+    a.rules.largeWithdrawal = { enabled: true, threshold: 1000, usdThreshold: 5000 };
+    const prev = snap({ seenTxHashes: ['0xseen'] });
+
+    const over = evaluate({
+      address: a,
+      prev,
+      balances: noBalances,
+      txs: [tx({ hash: '0xseen', direction: 'out', amount: 2, usdValue: 6000 })],
+    });
+    expect(over.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(1);
+
+    const underUsd = evaluate({
+      address: a,
+      prev,
+      balances: noBalances,
+      txs: [tx({ hash: '0xseen', direction: 'out', amount: 2, usdValue: 100 })],
+    });
+    expect(underUsd.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(0);
+  });
 });
 
 describe('evaluate — new_transaction', () => {

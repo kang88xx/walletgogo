@@ -9,6 +9,7 @@ import type {
   WatchedAddress,
 } from '@/lib/store/types';
 import { getNotifier, type Notifier } from '@/lib/notify';
+import { getPriceProvider, type PriceProvider } from '@/lib/prices/coingecko';
 
 /** Cap on tx hashes retained per snapshot so the JSON file can't grow forever. */
 const MAX_SEEN_HASHES = 500;
@@ -25,7 +26,54 @@ export interface AddressCheckResult {
   baseline: boolean;
   alerts: Alert[];
   balances: BalanceSnapshot[];
+  /** Total USD value of this address's priced balances, when available. */
+  usdTotal?: number;
   error?: string;
+}
+
+/**
+ * Attach usdValue to balances and transactions in place-free copies, using a
+ * single batched price lookup. Returns the priced copies plus the portfolio
+ * USD total. Never throws — missing prices simply leave usdValue undefined.
+ */
+async function enrichWithUsd(
+  prices: PriceProvider,
+  balances: BalanceSnapshot[],
+  txs: NormalizedTx[],
+): Promise<{
+  balances: BalanceSnapshot[];
+  txs: NormalizedTx[];
+  usdTotal: number | undefined;
+}> {
+  const symbols = new Set<string>();
+  for (const b of balances) symbols.add(b.asset);
+  for (const t of txs) symbols.add(t.asset);
+  if (symbols.size === 0) return { balances, txs, usdTotal: undefined };
+
+  let priceMap: Record<string, number | undefined> = {};
+  try {
+    priceMap = await prices.getPrices([...symbols]);
+  } catch {
+    // degrade to native-only
+    return { balances, txs, usdTotal: undefined };
+  }
+
+  let usdTotal: number | undefined;
+  const pricedBalances = balances.map((b) => {
+    const p = priceMap[b.asset];
+    if (typeof p === 'number') {
+      const v = p * b.amount;
+      usdTotal = (usdTotal ?? 0) + v;
+      return { ...b, usdValue: v };
+    }
+    return b;
+  });
+  const pricedTxs = txs.map((t) => {
+    const p = priceMap[t.asset];
+    return typeof p === 'number' ? { ...t, usdValue: p * t.amount } : t;
+  });
+
+  return { balances: pricedBalances, txs: pricedTxs, usdTotal };
 }
 
 export interface CheckRunResult {
@@ -35,6 +83,8 @@ export interface CheckRunResult {
   alerts: Alert[];
   /** Alerts newly persisted this run (deduped) — the set worth notifying on. */
   newAlerts: StoredAlert[];
+  /** Sum of all priced balances across addresses, when any price was available. */
+  portfolioUsd?: number;
 }
 
 function buildSnapshot(
@@ -70,6 +120,7 @@ export async function checkAddress(
   store: Store,
   address: WatchedAddress,
   checkedAt: number,
+  prices: PriceProvider = getPriceProvider(),
 ): Promise<AddressCheckResult> {
   const base = {
     addressId: address.id,
@@ -82,13 +133,21 @@ export async function checkAddress(
     const adapter = getAdapter(address.chainId);
     const prev = await store.getSnapshot(address.id);
 
-    const [balances, txs] = await Promise.all([
+    const [rawBalances, rawTxs] = await Promise.all([
       adapter.getBalance(address.address),
       adapter.getRecentTransactions(address.address, {
         sinceTs: prev?.lastTs,
         limit: TX_FETCH_LIMIT,
       }),
     ]);
+
+    // Enrich with USD so balance display, portfolio totals, and USD-denominated
+    // withdrawal thresholds all work. Degrades to native-only on price failure.
+    const { balances, txs, usdTotal } = await enrichWithUsd(
+      prices,
+      rawBalances,
+      rawTxs,
+    );
 
     const alerts = evaluate({ address, prev, balances, txs });
 
@@ -102,6 +161,7 @@ export async function checkAddress(
       baseline: prev === null,
       alerts,
       balances,
+      usdTotal,
     };
   } catch (err) {
     const message =
@@ -143,5 +203,10 @@ export async function runCheck(
       // notifier.dispatch is already failure-isolated; this is belt-and-braces.
     }
   }
-  return { checkedAt, results, alerts, newAlerts };
+  const priced = results.filter((r) => typeof r.usdTotal === 'number');
+  const portfolioUsd = priced.length
+    ? priced.reduce((sum, r) => sum + (r.usdTotal ?? 0), 0)
+    : undefined;
+
+  return { checkedAt, results, alerts, newAlerts, portfolioUsd };
 }

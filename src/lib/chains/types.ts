@@ -34,11 +34,19 @@ export interface NormalizedTx {
   /** Unix timestamp in seconds. */
   timestamp: number;
   blockNumber?: number;
+  /** USD value of `amount` at check time, when a price was available. */
+  usdValue?: number;
+  /** For approvals: the spender/operator being granted allowance. */
+  spender?: string;
+  /** For approvals: whether the granted allowance is effectively unlimited. */
+  unlimited?: boolean;
 }
 
 export interface BalanceSnapshot {
   asset: string;
   amount: number;
+  /** USD value of `amount` at check time, when a price was available. */
+  usdValue?: number;
 }
 
 export interface GetTxOptions {

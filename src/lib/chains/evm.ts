@@ -87,6 +87,118 @@ function rawToUnits(raw: string, decimals: number): number {
   }
 }
 
+// ERC20 balanceOf(address) selector.
+const BALANCE_OF_SELECTOR = '0x70a08231';
+/** Cap how many token balanceOf calls we make per address per check. */
+const MAX_TOKEN_BALANCE_QUERIES = 25;
+
+export interface HeldToken {
+  contract: string;
+  symbol: string;
+  decimals: number;
+}
+
+/**
+ * From a list of ERC20 transfer rows (Etherscan tokentx), derive the unique set
+ * of token contracts the address has interacted with, preserving recency order
+ * (rows are desc by time) and capping the count.
+ */
+export function deriveHeldTokens(
+  rows: Array<{
+    contractAddress?: string;
+    tokenSymbol?: string;
+    tokenDecimal?: string;
+  }>,
+  cap: number = MAX_TOKEN_BALANCE_QUERIES,
+): HeldToken[] {
+  const seen = new Set<string>();
+  const out: HeldToken[] = [];
+  for (const row of rows) {
+    const contract = row.contractAddress?.toLowerCase();
+    if (!contract || seen.has(contract)) continue;
+    seen.add(contract);
+    out.push({
+      contract,
+      symbol: row.tokenSymbol || contract,
+      decimals: parseInt(row.tokenDecimal ?? '18', 10) || 18,
+    });
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+/** ABI-encode balanceOf(address): selector + 32-byte left-padded address. */
+export function encodeBalanceOf(address: string): string {
+  const clean = address.toLowerCase().replace(/^0x/, '');
+  return BALANCE_OF_SELECTOR + clean.padStart(64, '0');
+}
+
+/** Decode a uint256 hex return value into human units. Empty/0x => 0. */
+export function decodeUint256(hex: string, decimals: number): number {
+  if (!hex || hex === '0x') return 0;
+  try {
+    const value = BigInt(hex);
+    return Number(value) / 10 ** decimals;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Anything at or above 2^255 is treated as an effectively-unlimited allowance.
+ * Covers MaxUint256 (the canonical "infinite approve") and the 2^255-ish values
+ * some routers use, without false-positiving normal large approvals.
+ */
+const UNLIMITED_THRESHOLD = 2n ** 255n;
+
+function addressFromWord(word: string): string {
+  // last 20 bytes (40 hex chars) of a 32-byte ABI word
+  return '0x' + word.slice(24).toLowerCase();
+}
+
+export interface ApproveDecode {
+  spender: string;
+  amount: bigint;
+  unlimited: boolean;
+}
+
+/** Decode approve(address,uint256) calldata. Returns null if it doesn't fit. */
+export function decodeApprove(input: string): ApproveDecode | null {
+  const data = input.toLowerCase();
+  if (!data.startsWith(APPROVE_METHOD_ID)) return null;
+  const body = data.slice(APPROVE_METHOD_ID.length); // strip selector
+  if (body.length < 128) return null; // need 2 words
+  try {
+    const spender = addressFromWord(body.slice(0, 64));
+    const amount = BigInt('0x' + body.slice(64, 128));
+    return { spender, amount, unlimited: amount >= UNLIMITED_THRESHOLD };
+  } catch {
+    return null;
+  }
+}
+
+export interface SetApprovalForAllDecode {
+  operator: string;
+  approved: boolean;
+}
+
+/** Decode setApprovalForAll(address,bool) calldata. Returns null if malformed. */
+export function decodeSetApprovalForAll(
+  input: string,
+): SetApprovalForAllDecode | null {
+  const data = input.toLowerCase();
+  if (!data.startsWith(SET_APPROVAL_FOR_ALL_METHOD_ID)) return null;
+  const body = data.slice(SET_APPROVAL_FOR_ALL_METHOD_ID.length);
+  if (body.length < 128) return null;
+  try {
+    const operator = addressFromWord(body.slice(0, 64));
+    const approved = BigInt('0x' + body.slice(64, 128)) !== 0n;
+    return { operator, approved };
+  } catch {
+    return null;
+  }
+}
+
 async function jsonRpc<T>(
   chainId: ChainId,
   rpcUrl: string,
@@ -199,7 +311,48 @@ export function createEvmAdapter(chainId: ChainId): ChainAdapter {
         address,
         'latest',
       ]);
-      return [{ asset: meta.nativeSymbol, amount: weiToUnits(hex) }];
+      const out: BalanceSnapshot[] = [
+        { asset: meta.nativeSymbol, amount: weiToUnits(hex) },
+      ];
+
+      // Token balances need the address's token contract set, which we derive
+      // from Etherscan tokentx history. Without an API key we degrade to
+      // native-only rather than failing.
+      const apiKey = process.env.ETHERSCAN_API_KEY;
+      if (!apiKey) return out;
+
+      try {
+        const tokenRows = await etherscanList(
+          chainId,
+          meta,
+          address,
+          'tokentx',
+          apiKey,
+        );
+        const held = deriveHeldTokens(tokenRows);
+        // Query balanceOf per token; isolate failures so one bad token or RPC
+        // hiccup never drops the whole balance call.
+        const balances = await Promise.all(
+          held.map(async (t): Promise<BalanceSnapshot | null> => {
+            try {
+              const data = encodeBalanceOf(address);
+              const resHex = await jsonRpc<string>(chainId, rpcUrl, 'eth_call', [
+                { to: t.contract, data },
+                'latest',
+              ]);
+              const amount = decodeUint256(resHex, t.decimals);
+              return amount > 0 ? { asset: t.symbol, amount } : null;
+            } catch {
+              return null;
+            }
+          }),
+        );
+        for (const b of balances) if (b) out.push(b);
+      } catch {
+        // tokentx fetch failed — keep native-only.
+      }
+
+      return out;
     },
 
     async getRecentTransactions(
@@ -226,14 +379,24 @@ export function createEvmAdapter(chainId: ChainId): ChainAdapter {
         const input = (row.input ?? '').toLowerCase();
         let type: TxType = 'native';
         let amount = weiToUnits(row.value);
-        // An approval is a method call carrying no native value; flag it so the
-        // approval rule can fire (drainer defense).
-        if (input.startsWith(APPROVE_METHOD_ID)) {
+        let spender: string | undefined;
+        let unlimited: boolean | undefined;
+        // Approvals carry no native value but grant token/NFT control — the core
+        // drainer vector. Decode the spender so the alert can name it, and flag
+        // unlimited allowances as the highest-risk case.
+        const approve = decodeApprove(input);
+        const setAll = decodeSetApprovalForAll(input);
+        if (approve) {
           type = 'approval';
           amount = 0;
-        } else if (input.startsWith(SET_APPROVAL_FOR_ALL_METHOD_ID)) {
+          spender = approve.spender;
+          unlimited = approve.unlimited;
+        } else if (setAll) {
           type = 'nft_approval';
           amount = 0;
+          spender = setAll.operator;
+          // setApprovalForAll(operator, true) hands over the whole collection.
+          unlimited = setAll.approved;
         }
         out.push({
           hash: row.hash,
@@ -245,6 +408,8 @@ export function createEvmAdapter(chainId: ChainId): ChainAdapter {
           type,
           timestamp: parseInt(row.timeStamp, 10) || 0,
           blockNumber: parseInt(row.blockNumber, 10) || undefined,
+          spender,
+          unlimited,
         });
       }
 
