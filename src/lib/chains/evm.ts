@@ -177,6 +177,33 @@ export function decodeApprove(input: string): ApproveDecode | null {
   }
 }
 
+export interface ApprovalClassification {
+  type: 'approval' | 'nft_approval';
+  spender: string;
+  unlimited: boolean;
+}
+
+/**
+ * Classify calldata as an approval *grant* worth alerting on. Returns null for
+ * non-approval calls AND for revocations — approve(spender, 0) and
+ * setApprovalForAll(op, false) are safe hygiene, not drainer risk.
+ */
+export function classifyApprovalCall(
+  input: string,
+): ApprovalClassification | null {
+  const approve = decodeApprove(input);
+  if (approve) {
+    if (approve.amount <= 0n) return null; // revoke
+    return { type: 'approval', spender: approve.spender, unlimited: approve.unlimited };
+  }
+  const setAll = decodeSetApprovalForAll(input);
+  if (setAll) {
+    if (!setAll.approved) return null; // revoke
+    return { type: 'nft_approval', spender: setAll.operator, unlimited: true };
+  }
+  return null;
+}
+
 export interface SetApprovalForAllDecode {
   operator: string;
   approved: boolean;
@@ -384,19 +411,14 @@ export function createEvmAdapter(chainId: ChainId): ChainAdapter {
         // Approvals carry no native value but grant token/NFT control — the core
         // drainer vector. Decode the spender so the alert can name it, and flag
         // unlimited allowances as the highest-risk case.
-        const approve = decodeApprove(input);
-        const setAll = decodeSetApprovalForAll(input);
-        if (approve) {
-          type = 'approval';
+        // Only approval *grants* are a drainer risk; revocations are left as
+        // ordinary txs (see classifyApprovalCall).
+        const approval = classifyApprovalCall(input);
+        if (approval) {
+          type = approval.type;
           amount = 0;
-          spender = approve.spender;
-          unlimited = approve.unlimited;
-        } else if (setAll) {
-          type = 'nft_approval';
-          amount = 0;
-          spender = setAll.operator;
-          // setApprovalForAll(operator, true) hands over the whole collection.
-          unlimited = setAll.approved;
+          spender = approval.spender;
+          unlimited = approval.unlimited;
         }
         out.push({
           hash: row.hash,

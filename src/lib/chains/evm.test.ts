@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classifyApprovalCall,
   decodeApprove,
   decodeSetApprovalForAll,
   decodeUint256,
@@ -103,5 +104,36 @@ describe('decodeSetApprovalForAll', () => {
 
   it('returns null for unrelated calldata', () => {
     expect(decodeSetApprovalForAll('0x095ea7b3' + word(SPENDER) + word('1'))).toBeNull();
+  });
+});
+
+describe('classifyApprovalCall (grant vs revoke)', () => {
+  it('classifies a positive approve as an approval grant', () => {
+    const c = classifyApprovalCall('0x095ea7b3' + word(SPENDER) + word('64'))!;
+    expect(c).toMatchObject({ type: 'approval', unlimited: false });
+    expect(c.spender).toBe('0x' + SPENDER);
+  });
+
+  it('flags MaxUint256 approve as unlimited', () => {
+    const c = classifyApprovalCall('0x095ea7b3' + word(SPENDER) + MAX_UINT256)!;
+    expect(c.unlimited).toBe(true);
+  });
+
+  it('treats approve(spender, 0) as a revoke (null, no alert)', () => {
+    expect(classifyApprovalCall('0x095ea7b3' + word(SPENDER) + word('0'))).toBeNull();
+  });
+
+  it('classifies setApprovalForAll(op, true) as nft_approval grant (unlimited)', () => {
+    const c = classifyApprovalCall('0xa22cb465' + word(SPENDER) + word('1'))!;
+    expect(c).toMatchObject({ type: 'nft_approval', unlimited: true });
+    expect(c.spender).toBe('0x' + SPENDER);
+  });
+
+  it('treats setApprovalForAll(op, false) as a revoke (null, no alert)', () => {
+    expect(classifyApprovalCall('0xa22cb465' + word(SPENDER) + word('0'))).toBeNull();
+  });
+
+  it('returns null for non-approval calldata', () => {
+    expect(classifyApprovalCall('0xdeadbeef' + word(SPENDER) + word('1'))).toBeNull();
   });
 });
