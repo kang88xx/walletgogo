@@ -1,0 +1,591 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap');
+
+/* =========================================================================
+   ARK Prefab v2.0 — design tokens
+   Navy carries everything. White is ground. Amber only where attention is earned.
+   ========================================================================= */
+:root {
+  /* Navy scale — primary */
+  --navy-950: #04114f;
+  --navy-900: #091955; /* canonical: covers, dividers, headers, statements */
+  --navy-700: #011081; /* cobalt */
+  --navy-500: #546083; /* steel: sub-header, chrome */
+  --navy-300: #a0a6bb; /* mist: section numerals, quiet figures */
+
+  /* Accents */
+  --amber-500: #efc540; /* pill badge, brand mark, attention earned */
+  --amber-300: #f6dd8c;
+  --indigo-500: #636ddb;
+  --indigo-300: #a3a8ea;
+
+  /* Neutrals / surface */
+  --white: #ffffff; /* cards, primary surface */
+  --paper: #f4f4f8; /* page background */
+  --paper-2: #ecedf3; /* table label cell, tints */
+  --ink-500: #5c637a; /* body / caption */
+  --ink-900: #0f1320; /* strong text */
+  --hairline: #e3e4ec; /* dividers, card borders */
+
+  /* Gradients sampled from the ARK cover */
+  --cover-radial: radial-gradient(120% 80% at 50% 35%, #1b2c8e 0%, #0c2070 40%, #091955 70%, #04114f 100%);
+  --cover-linear: linear-gradient(180deg, #1b2c8e 0%, #091955 55%, #04114f 100%);
+
+  --font-sans: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, system-ui,
+    'Segoe UI', 'Noto Sans KR', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius: 6px;
+  --radius-sm: 3px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink-900);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--amber-300);
+  color: var(--navy-900);
+}
+
+/* =========================================================================
+   Page chrome rail — Geist Mono, uppercase, .18em tracking, navy 500 on paper
+   ========================================================================= */
+.rail {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 40px;
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--navy-500);
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.rail .center {
+  text-align: center;
+}
+.rail .right {
+  text-align: right;
+}
+.rail .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber-500);
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+/* =========================================================================
+   Layout
+   ========================================================================= */
+.shell {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 40px 120px;
+}
+
+@media (max-width: 720px) {
+  .rail {
+    padding: 14px 20px;
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .rail .center,
+  .rail .right {
+    display: none;
+  }
+  .shell {
+    padding: 0 20px 80px;
+  }
+}
+
+/* --- Hero / cover statement --------------------------------------------- */
+.hero {
+  padding: 72px 0 56px;
+}
+.hero .eyebrow {
+  margin-bottom: 28px;
+}
+.hero h1 {
+  font-size: clamp(40px, 7vw, 80px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin: 0 0 24px;
+  color: var(--navy-900);
+}
+.hero .lede {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--ink-500);
+  max-width: 620px;
+  margin: 0;
+}
+.hero .meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 32px;
+}
+
+/* --- Section block ------------------------------------------------------ */
+.section {
+  padding: 56px 0 0;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 18px;
+  margin-bottom: 28px;
+}
+.numeral {
+  font-size: 44px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--navy-300);
+  font-variant-numeric: tabular-nums;
+}
+.section-head .titles {
+  flex: 1;
+  min-width: 0;
+}
+.section-head h2 {
+  font-size: clamp(26px, 4vw, 40px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  margin: 0;
+  color: var(--navy-900);
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--navy-500);
+}
+.section-head .eyebrow {
+  margin-bottom: 8px;
+}
+.section-head .right-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--navy-300);
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .section-head .right-tag {
+    display: none;
+  }
+  .numeral {
+    font-size: 34px;
+  }
+}
+
+/* =========================================================================
+   Cards — white on paper, hairline border (architectural-document feel)
+   ========================================================================= */
+.card {
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+.card-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--navy-500);
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* =========================================================================
+   Forms
+   ========================================================================= */
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--navy-500);
+}
+.grow {
+  flex: 1 1 240px;
+}
+input,
+select {
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--ink-900);
+  padding: 11px 12px;
+  font-size: 14px;
+  font-family: var(--font-sans);
+  min-width: 0;
+  transition: border-color 0.12s ease;
+}
+input::placeholder {
+  color: var(--navy-300);
+}
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--navy-700);
+}
+
+/* =========================================================================
+   Buttons — navy is canonical, ghost is quiet, danger is outlined
+   ========================================================================= */
+button {
+  font-family: var(--font-sans);
+  background: var(--navy-900);
+  color: var(--white);
+  border: 1px solid var(--navy-900);
+  border-radius: var(--radius-sm);
+  padding: 11px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.12s ease, opacity 0.12s ease;
+}
+button:hover:not(:disabled) {
+  background: var(--navy-700);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--navy-900);
+}
+button.ghost:hover:not(:disabled) {
+  background: var(--paper-2);
+  border-color: var(--navy-300);
+}
+button.danger {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink-500);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+button.danger:hover:not(:disabled) {
+  border-color: #d8a3ad;
+  color: #c0395a;
+  background: transparent;
+}
+
+/* =========================================================================
+   Tags & pills
+   ========================================================================= */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--navy-500);
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  border-radius: 999px;
+  padding: 4px 13px;
+  border: 1px solid var(--navy-900);
+  color: var(--navy-900);
+  background: transparent;
+}
+.pill.solid {
+  background: var(--navy-900);
+  color: var(--white);
+}
+.pill.amber {
+  background: var(--amber-500);
+  border-color: var(--amber-500);
+  color: var(--navy-900);
+}
+
+/* =========================================================================
+   Watchlist
+   ========================================================================= */
+.addr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.addr-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--white);
+  padding: 16px 20px;
+}
+.addr-main {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.addr-label {
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: var(--navy-900);
+}
+.addr-addr {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-500);
+  letter-spacing: 0.01em;
+  word-break: break-all;
+}
+
+/* =========================================================================
+   Stat blocks — single big light-weight figure (page 50 style)
+   ========================================================================= */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.stat {
+  background: var(--white);
+  padding: 22px 20px;
+}
+.stat .figure {
+  font-size: 34px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--navy-900);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+.stat .figure .unit {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--navy-500);
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+.stat .stat-label {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+/* =========================================================================
+   Alerts — amber only for critical (attention earned)
+   ========================================================================= */
+.alerts {
+  display: grid;
+  gap: 10px;
+}
+.alert {
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+}
+.alert.info {
+  border-left-color: var(--navy-300);
+}
+.alert.warn {
+  border-left-color: var(--navy-700);
+}
+.alert.critical {
+  border-left-color: var(--amber-500);
+}
+.alert-title {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--navy-900);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.alert-msg {
+  font-size: 14px;
+  color: var(--ink-900);
+  margin-top: 4px;
+}
+.alert-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--navy-500);
+  letter-spacing: 0.04em;
+  margin-top: 8px;
+}
+.sev-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+.sev-badge.info {
+  background: var(--paper-2);
+  color: var(--navy-500);
+}
+.sev-badge.warn {
+  background: transparent;
+  border-color: var(--navy-700);
+  color: var(--navy-700);
+}
+.sev-badge.critical {
+  background: var(--amber-500);
+  color: var(--navy-900);
+}
+
+/* =========================================================================
+   Result ledger lines
+   ========================================================================= */
+.results {
+  margin-top: 20px;
+  border-top: 1px solid var(--hairline);
+}
+.result-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13px;
+}
+.result-line .r-status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.result-line .r-status.ok {
+  background: var(--navy-700);
+}
+.result-line .r-status.fail {
+  background: var(--amber-500);
+}
+.result-line .r-label {
+  font-weight: 600;
+  color: var(--navy-900);
+  min-width: 120px;
+}
+.result-line .r-detail {
+  color: var(--ink-500);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* =========================================================================
+   Misc
+   ========================================================================= */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.toolbar .spacer {
+  flex: 1;
+}
+.empty {
+  color: var(--ink-500);
+  font-size: 14px;
+  padding: 4px 0;
+}
+.error {
+  color: #c0395a;
+  font-size: 13px;
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--navy-300);
+  letter-spacing: 0.1em;
+}
