@@ -77,9 +77,15 @@ export function evaluate({ address, prev, balances, txs }: EvaluateInput): Alert
       });
     }
 
-    if (rules.largeWithdrawal.enabled && tx.direction === 'out') {
+    // large_withdrawal/approval fire only for genuinely-new tx hashes. These
+    // rules would otherwise re-emit on every run while the tx stays in the
+    // explorer's window; gating on `isNew` makes once-per-event robust without
+    // relying on the (capped) store dedup as the only guard.
+    if (isNew && rules.largeWithdrawal.enabled && tx.direction === 'out') {
       const { threshold, usdThreshold } = rules.largeWithdrawal;
-      const overNative = tx.amount > threshold;
+      // Native threshold only applies to native-asset transfers; a token's
+      // amount must not be compared against a native-unit threshold.
+      const overNative = tx.type === 'native' && tx.amount > threshold;
       const overUsd =
         typeof usdThreshold === 'number' &&
         typeof tx.usdValue === 'number' &&
@@ -105,7 +111,11 @@ export function evaluate({ address, prev, balances, txs }: EvaluateInput): Alert
       }
     }
 
-    if (rules.approval && (tx.type === 'approval' || tx.type === 'nft_approval')) {
+    if (
+      isNew &&
+      rules.approval &&
+      (tx.type === 'approval' || tx.type === 'nft_approval')
+    ) {
       const isNft = tx.type === 'nft_approval';
       const spenderPart = tx.spender
         ? ` spender ${tx.spender.slice(0, 10)}…${tx.spender.slice(-6)}`

@@ -102,16 +102,16 @@ describe('evaluate — balance_change', () => {
 });
 
 describe('evaluate — large_withdrawal', () => {
-  it('fires only above threshold and only on outgoing transfers', () => {
+  it('fires only above threshold and only on outgoing, unseen native transfers', () => {
     const a = addr();
     a.rules.largeWithdrawal = { enabled: true, threshold: 10 };
-    const prev = snap({ seenTxHashes: ['0xseen'] });
+    const prev = snap({ seenTxHashes: ['0xold'] });
 
     const big = evaluate({
       address: a,
       prev,
       balances: noBalances,
-      txs: [tx({ hash: '0xseen', direction: 'out', amount: 50 })],
+      txs: [tx({ hash: '0xbig', direction: 'out', amount: 50 })],
     });
     expect(big.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(1);
     expect(big.find((x) => x.rule === 'large_withdrawal')?.severity).toBe('critical');
@@ -120,7 +120,7 @@ describe('evaluate — large_withdrawal', () => {
       address: a,
       prev,
       balances: noBalances,
-      txs: [tx({ hash: '0xseen', direction: 'out', amount: 5 })],
+      txs: [tx({ hash: '0xbig', direction: 'out', amount: 5 })],
     });
     expect(below.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(0);
 
@@ -128,22 +128,52 @@ describe('evaluate — large_withdrawal', () => {
       address: a,
       prev,
       balances: noBalances,
-      txs: [tx({ hash: '0xseen', direction: 'in', amount: 50 })],
+      txs: [tx({ hash: '0xbig', direction: 'in', amount: 50 })],
     });
     expect(incoming.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(0);
   });
 
-  it('fires on USD threshold even when below the native threshold', () => {
+  it('does NOT re-fire for a tx hash already seen (once-per-event)', () => {
     const a = addr();
-    // High native threshold so only the USD trigger can fire.
+    a.rules.largeWithdrawal = { enabled: true, threshold: 10 };
+    const prev = snap({ seenTxHashes: ['0xbig'] }); // already seen
+    const alerts = evaluate({
+      address: a,
+      prev,
+      balances: noBalances,
+      txs: [tx({ hash: '0xbig', direction: 'out', amount: 50 })],
+    });
+    expect(alerts.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(0);
+  });
+
+  it('does NOT apply the native threshold to token-asset withdrawals', () => {
+    const a = addr();
+    a.rules.largeWithdrawal = { enabled: true, threshold: 1 };
+    const prev = snap({ seenTxHashes: ['0xold'] });
+    // 5 USDT out: above native threshold 1, but it is a token, not native.
+    const alerts = evaluate({
+      address: a,
+      prev,
+      balances: noBalances,
+      txs: [
+        tx({ hash: '0xtok', direction: 'out', amount: 5, asset: 'USDT', type: 'token' }),
+      ],
+    });
+    expect(alerts.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(0);
+  });
+
+  it('fires on USD threshold even when below the native threshold (incl. tokens)', () => {
+    const a = addr();
     a.rules.largeWithdrawal = { enabled: true, threshold: 1000, usdThreshold: 5000 };
-    const prev = snap({ seenTxHashes: ['0xseen'] });
+    const prev = snap({ seenTxHashes: ['0xold'] });
 
     const over = evaluate({
       address: a,
       prev,
       balances: noBalances,
-      txs: [tx({ hash: '0xseen', direction: 'out', amount: 2, usdValue: 6000 })],
+      txs: [
+        tx({ hash: '0xusd', direction: 'out', amount: 2, asset: 'USDT', type: 'token', usdValue: 6000 }),
+      ],
     });
     expect(over.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(1);
 
@@ -151,7 +181,7 @@ describe('evaluate — large_withdrawal', () => {
       address: a,
       prev,
       balances: noBalances,
-      txs: [tx({ hash: '0xseen', direction: 'out', amount: 2, usdValue: 100 })],
+      txs: [tx({ hash: '0xusd2', direction: 'out', amount: 2, usdValue: 100 })],
     });
     expect(underUsd.filter((x) => x.rule === 'large_withdrawal')).toHaveLength(0);
   });
@@ -173,15 +203,15 @@ describe('evaluate — new_transaction', () => {
 });
 
 describe('evaluate — approval', () => {
-  it('fires for approval and nft_approval types', () => {
-    const prev = snap({ seenTxHashes: ['0xa', '0xb'] });
+  it('fires for unseen approval and nft_approval types', () => {
+    const prev = snap({ seenTxHashes: ['0xold'] });
     const alerts = evaluate({
       address: addr(),
       prev,
       balances: noBalances,
       txs: [
-        tx({ hash: '0xa', type: 'approval', amount: 0 }),
-        tx({ hash: '0xb', type: 'nft_approval', amount: 0 }),
+        tx({ hash: '0xap', type: 'approval', amount: 0 }),
+        tx({ hash: '0xnft', type: 'nft_approval', amount: 0 }),
       ],
     });
     const ap = alerts.filter((x) => x.rule === 'approval');
@@ -189,13 +219,45 @@ describe('evaluate — approval', () => {
     expect(ap.every((x) => x.severity === 'critical')).toBe(true);
   });
 
-  it('does not fire for plain native transfers', () => {
-    const prev = snap({ seenTxHashes: ['0xa'] });
+  it('does NOT re-fire an approval whose hash was already seen', () => {
+    const prev = snap({ seenTxHashes: ['0xap'] });
     const alerts = evaluate({
       address: addr(),
       prev,
       balances: noBalances,
-      txs: [tx({ hash: '0xa', type: 'native' })],
+      txs: [tx({ hash: '0xap', type: 'approval', amount: 0 })],
+    });
+    expect(alerts.filter((x) => x.rule === 'approval')).toHaveLength(0);
+  });
+
+  it('flags unlimited approvals with a spender in the message', () => {
+    const prev = snap({ seenTxHashes: ['0xold'] });
+    const alerts = evaluate({
+      address: addr(),
+      prev,
+      balances: noBalances,
+      txs: [
+        tx({
+          hash: '0xunl',
+          type: 'approval',
+          amount: 0,
+          spender: '0x1111111254eeb25477b68fb85ed929f73a960582',
+          unlimited: true,
+        }),
+      ],
+    });
+    const ap = alerts.find((x) => x.rule === 'approval');
+    expect(ap?.title).toContain('무제한');
+    expect(ap?.message).toContain('spender');
+  });
+
+  it('does not fire for plain native transfers', () => {
+    const prev = snap({ seenTxHashes: ['0xold'] });
+    const alerts = evaluate({
+      address: addr(),
+      prev,
+      balances: noBalances,
+      txs: [tx({ hash: '0xn', type: 'native' })],
     });
     expect(alerts.filter((x) => x.rule === 'approval')).toHaveLength(0);
   });

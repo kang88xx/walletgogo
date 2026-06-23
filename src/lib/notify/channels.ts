@@ -55,17 +55,38 @@ export function telegramChannel(): NotifyChannel {
   };
 }
 
-/** Discord webhook channel — requires DISCORD_WEBHOOK_URL. */
+/**
+ * Validate a Discord webhook URL: https + an official Discord host. Prevents a
+ * misconfigured/injected env from turning the notifier into an SSRF that POSTs
+ * alert contents (which name watched addresses) to an arbitrary host.
+ */
+export function isValidDiscordWebhook(raw: string | undefined): boolean {
+  if (!raw) return false;
+  try {
+    const u = new URL(raw);
+    return (
+      u.protocol === 'https:' &&
+      (u.hostname === 'discord.com' ||
+        u.hostname === 'discordapp.com' ||
+        u.hostname === 'canary.discord.com' ||
+        u.hostname === 'ptb.discord.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Discord webhook channel — requires a valid https DISCORD_WEBHOOK_URL. */
 export function discordChannel(): NotifyChannel {
   return {
     name: 'discord',
     enabled() {
-      return Boolean(process.env.DISCORD_WEBHOOK_URL);
+      return isValidDiscordWebhook(process.env.DISCORD_WEBHOOK_URL);
     },
     async send(alerts: StoredAlert[]): Promise<boolean> {
       if (alerts.length === 0) return true;
       const url = process.env.DISCORD_WEBHOOK_URL;
-      if (!url) return false;
+      if (!isValidDiscordWebhook(url) || !url) return false;
       try {
         const res = await fetch(url, {
           method: 'POST',

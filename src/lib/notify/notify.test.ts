@@ -48,9 +48,13 @@ describe('channel enablement from env', () => {
     expect(telegramChannel().enabled()).toBe(true);
   });
 
-  it('discord requires the webhook url', () => {
+  it('discord requires a valid https discord webhook url (SSRF guard)', () => {
     expect(discordChannel().enabled()).toBe(false);
-    process.env.DISCORD_WEBHOOK_URL = 'https://x';
+    process.env.DISCORD_WEBHOOK_URL = 'http://evil.internal/x'; // not https/discord
+    expect(discordChannel().enabled()).toBe(false);
+    process.env.DISCORD_WEBHOOK_URL = 'https://attacker.com/api/webhooks/1/abc';
+    expect(discordChannel().enabled()).toBe(false);
+    process.env.DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/123/abc';
     expect(discordChannel().enabled()).toBe(true);
   });
 

@@ -22,6 +22,43 @@ export const DEFAULT_RULES: AlertRuleConfig = {
   approval: true,
 };
 
+/**
+ * Coerce arbitrary input into a valid AlertRuleConfig, filling defaults for
+ * anything missing or malformed. Used by the rule-editing API so a bad payload
+ * can never corrupt stored config.
+ */
+export function sanitizeRules(input: unknown): AlertRuleConfig {
+  const o = (input ?? {}) as Record<string, unknown>;
+  const lw = (o.largeWithdrawal ?? {}) as Record<string, unknown>;
+  const threshold = Number(lw.threshold);
+  const usdThreshold = Number(lw.usdThreshold);
+  return {
+    balanceChange:
+      typeof o.balanceChange === 'boolean'
+        ? o.balanceChange
+        : DEFAULT_RULES.balanceChange,
+    newTransaction:
+      typeof o.newTransaction === 'boolean'
+        ? o.newTransaction
+        : DEFAULT_RULES.newTransaction,
+    approval:
+      typeof o.approval === 'boolean' ? o.approval : DEFAULT_RULES.approval,
+    largeWithdrawal: {
+      enabled:
+        typeof lw.enabled === 'boolean'
+          ? lw.enabled
+          : DEFAULT_RULES.largeWithdrawal.enabled,
+      threshold:
+        Number.isFinite(threshold) && threshold >= 0
+          ? threshold
+          : DEFAULT_RULES.largeWithdrawal.threshold,
+      ...(Number.isFinite(usdThreshold) && usdThreshold > 0
+        ? { usdThreshold }
+        : {}),
+    },
+  };
+}
+
 export type RuleType =
   | 'balance_change'
   | 'large_withdrawal'
