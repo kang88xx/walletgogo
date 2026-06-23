@@ -131,8 +131,10 @@ export function getScheduler(): Scheduler {
   if (!g.__walletGogoScheduler) {
     g.__walletGogoScheduler = new Scheduler();
     // Auto-start when an interval is configured via env (opt-in monitoring).
+    // Skip on Vercel/serverless: setInterval can't survive between invocations
+    // there — Vercel Cron (/api/cron) is the polling mechanism instead.
     const envInterval = process.env.POLL_INTERVAL_SECONDS;
-    if (envInterval) {
+    if (envInterval && !process.env.VERCEL) {
       g.__walletGogoScheduler.start(clampInterval(Number(envInterval)));
     }
   }

@@ -25,7 +25,11 @@ interface PersistShape {
 const EMPTY: PersistShape = { addresses: [], snapshots: {}, alerts: [] };
 
 function defaultDataFile(): string {
-  return process.env.WALLET_GOGO_DATA_FILE || join(process.cwd(), '.data', 'wallet-gogo.json');
+  if (process.env.WALLET_GOGO_DATA_FILE) return process.env.WALLET_GOGO_DATA_FILE;
+  // On Vercel/serverless only /tmp is writable (and ephemeral). For durable
+  // storage, point WALLET_GOGO_DATA_FILE at a real volume or swap the Store.
+  if (process.env.VERCEL) return '/tmp/wallet-gogo.json';
+  return join(process.cwd(), '.data', 'wallet-gogo.json');
 }
 
 /**
