@@ -18,6 +18,7 @@ export const CHAINS: Record<ChainId, ChainMeta> = {
   arbitrum: { id: 'arbitrum', label: 'Arbitrum One', family: 'evm', nativeSymbol: 'ETH' },
   optimism: { id: 'optimism', label: 'Optimism', family: 'evm', nativeSymbol: 'ETH' },
   base: { id: 'base', label: 'Base', family: 'evm', nativeSymbol: 'ETH' },
+  xphere: { id: 'xphere', label: 'Xphere', family: 'evm', nativeSymbol: 'XP' },
   solana: { id: 'solana', label: 'Solana', family: 'solana', nativeSymbol: 'SOL' },
   bitcoin: { id: 'bitcoin', label: 'Bitcoin', family: 'bitcoin', nativeSymbol: 'BTC' },
   tron: { id: 'tron', label: 'Tron', family: 'tron', nativeSymbol: 'TRX' },

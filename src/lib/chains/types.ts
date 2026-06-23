@@ -7,6 +7,7 @@ export type ChainId =
   | 'arbitrum'
   | 'optimism'
   | 'base'
+  | 'xphere'
   | 'solana'
   | 'bitcoin'
   | 'tron';

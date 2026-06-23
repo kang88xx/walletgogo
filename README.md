@@ -42,7 +42,10 @@
 - Next.js 15 (App Router) · React 19 · TypeScript
 - 외부 의존성 없는 JSON 파일 스토어 (`.data/`)
 - vitest 단위 테스트 (66+)
-- 체인: Etherscan V2 + JSON-RPC(EVM), mempool.space(BTC), Solana RPC, TronGrid
+- 체인: Etherscan V2 + JSON-RPC(EVM: Ethereum·BSC·Polygon·Arbitrum·Optimism·Base·
+  **Xphere**), mempool.space(BTC), Solana RPC, TronGrid
+  - Xphere(chain id 20250217, XP)는 Etherscan 미인덱싱이라 네이티브 잔액·잔액변동만
+    지원하고 트랜잭션 기반 규칙은 degrade됩니다.
 - 가격: CoinGecko
 
 ## 구조

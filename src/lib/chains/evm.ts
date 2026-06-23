@@ -10,8 +10,12 @@ import {
 } from './types';
 
 interface EvmChainMeta {
-  /** Etherscan V2 numeric chain id. */
-  etherscanChainId: number;
+  /**
+   * Etherscan V2 numeric chain id. Omit for EVM chains Etherscan doesn't index
+   * (e.g. Xphere): native balance still works over JSON-RPC, but transaction
+   * history and token balances degrade to native-only.
+   */
+  etherscanChainId?: number;
   nativeSymbol: string;
   /** Env var name for an optional custom JSON-RPC endpoint. */
   rpcEnv: string;
@@ -55,6 +59,12 @@ const EVM_CHAINS: Record<string, EvmChainMeta> = {
     nativeSymbol: 'ETH',
     rpcEnv: 'BASE_RPC_URL',
     defaultRpc: 'https://mainnet.base.org',
+  },
+  xphere: {
+    // No Etherscan support → native-balance-only (tx history degrades).
+    nativeSymbol: 'XP',
+    rpcEnv: 'XPHERE_RPC_URL',
+    defaultRpc: 'https://en-hkg.x-phere.com',
   },
 };
 
@@ -343,10 +353,11 @@ export function createEvmAdapter(chainId: ChainId): ChainAdapter {
       ];
 
       // Token balances need the address's token contract set, which we derive
-      // from Etherscan tokentx history. Without an API key we degrade to
-      // native-only rather than failing.
+      // from Etherscan tokentx history. Without an API key — or on a chain
+      // Etherscan doesn't index (no etherscanChainId, e.g. Xphere) — we degrade
+      // to native-only rather than failing.
       const apiKey = process.env.ETHERSCAN_API_KEY;
-      if (!apiKey) return out;
+      if (!apiKey || !meta.etherscanChainId) return out;
 
       try {
         const tokenRows = await etherscanList(
@@ -386,6 +397,10 @@ export function createEvmAdapter(chainId: ChainId): ChainAdapter {
       address: string,
       opts: GetTxOptions,
     ): Promise<NormalizedTx[]> {
+      // Chains Etherscan doesn't index (no etherscanChainId, e.g. Xphere) have
+      // no history source here — balance-based rules still work.
+      if (!meta.etherscanChainId) return [];
+
       const apiKey = process.env.ETHERSCAN_API_KEY;
       if (!apiKey) {
         // Degrade gracefully: balance-based rules still work without history.
