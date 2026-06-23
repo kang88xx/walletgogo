@@ -10,7 +10,12 @@
 - **자동 폴링 스케줄러** — 설정 가능한 간격으로 모든 주소를 주기 점검 (서버 사이드,
   실행 겹침 방지, 오류 격리). UI 또는 `POLL_INTERVAL_SECONDS`로 제어.
 - **알림 전송** — Telegram 봇, Discord 웹훅, 콘솔. env로 켜며 미설정 시 무시. 알림은
-  dedup으로 이벤트당 한 번만 발송.
+  dedup으로 이벤트당 한 번만 발송. **채널별 최소 심각도 라우팅**(예: Telegram은
+  critical만, Discord는 전부).
+- **실시간 webhook** — Alchemy(EVM) · Helius(Solana) 푸시를 받아 폴링과 동일한 룰
+  엔진으로 즉시 평가·알림. 서명/시크릿 검증 후 처리.
+- **Approval spender 평판** — 알려진 안전 라우터(Uniswap·1inch·Permit2·0x)는 warn으로
+  완화, `MALICIOUS_SPENDERS` 블록리스트는 악성 critical로 강조.
 - **알림 히스토리** — 발생한 알림을 저장(상한 1000), 타임라인 UI에서 읽음 처리.
 - **USD 가치 평가** — CoinGecko 가격(TTL 캐시)으로 잔액·포트폴리오를 USD로. 대규모
   출금 임계값을 USD로도 설정 가능.
@@ -47,10 +52,12 @@ src/lib/chains/      체인 어댑터 + 레지스트리 (공통 ChainAdapter 인
 src/lib/rules/       순수 알림 평가 엔진 + dedupKey + sanitizeRules
 src/lib/store/       Store 인터페이스 + 파일 구현 (주소·스냅샷·알림 히스토리)
 src/lib/prices/      CoinGecko USD 가격 (TTL 캐시)
-src/lib/notify/      pluggable 알림 채널 (Telegram·Discord·Console)
+src/lib/notify/      pluggable 알림 채널 + 채널별 심각도 라우팅
 src/lib/scheduler/   백그라운드 폴링 스케줄러
+src/lib/security/    approval spender 평판 (안전 라우터 / 블록리스트)
+src/lib/webhooks/    실시간 webhook 검증·파싱·처리 (Alchemy·Helius)
 src/lib/monitor.ts   오케스트레이터 (fetch → USD 보강 → evaluate → 영속 → 알림)
-src/app/             대시보드 UI + API (/api/addresses, /check, /alerts, /scheduler)
+src/app/             대시보드 UI + API (/addresses, /check, /alerts, /scheduler, /webhooks/[provider])
 ```
 
 ## 시작
@@ -76,8 +83,12 @@ RPC(`ETHEREUM_RPC_URL` 등)와 `ETHERSCAN_API_KEY` 설정을 권장합니다.
 | `COINGECKO_API_KEY` / `COINGECKO_API_BASE` | 가격 API 키 / 베이스 |
 | `POLL_INTERVAL_SECONDS` | 스케줄러 자동 시작 간격(초, 최소 15) |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Telegram 알림 |
-| `DISCORD_WEBHOOK_URL` | Discord 알림 |
+| `DISCORD_WEBHOOK_URL` | Discord 알림 (https discord.com 호스트 검증) |
 | `NOTIFY_CONSOLE` | `1`이면 콘솔로 알림 출력 |
+| `{TELEGRAM,DISCORD,CONSOLE}_MIN_SEVERITY` | 채널별 최소 심각도 (info\|warn\|critical) |
+| `MALICIOUS_SPENDERS` | 악성 spender 블록리스트 (쉼표 구분) |
+| `ALCHEMY_WEBHOOK_SIGNING_KEY` | Alchemy 웹훅 서명 검증 → `POST /api/webhooks/alchemy` |
+| `HELIUS_WEBHOOK_SECRET` | Helius 웹훅 시크릿 → `POST /api/webhooks/helius` |
 | `WALLET_GOGO_DATA_FILE` | 스토어 파일 경로 (기본 `./.data/wallet-gogo.json`) |
 
 ## 검증

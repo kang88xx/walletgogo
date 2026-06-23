@@ -80,6 +80,30 @@ describe('alert persistence + dedup', () => {
   });
 });
 
+describe('updateSnapshot (atomic merge)', () => {
+  it('creates via merge and re-reads current on the next call', async () => {
+    await store.updateSnapshot('a1', (prev) => {
+      expect(prev).toBeNull();
+      return { addressId: 'a1', checkedAt: 1, balances: { ETH: 5 }, seenTxHashes: ['h1'], lastTs: 10 };
+    });
+    await store.updateSnapshot('a1', (prev) => {
+      expect(prev?.seenTxHashes).toEqual(['h1']);
+      return {
+        ...prev!,
+        seenTxHashes: Array.from(new Set(['h2', ...prev!.seenTxHashes])),
+      };
+    });
+    const snap = await store.getSnapshot('a1');
+    expect(snap?.seenTxHashes).toEqual(['h2', 'h1']);
+    expect(snap?.balances).toEqual({ ETH: 5 }); // balances preserved
+  });
+
+  it('returning null is a no-op', async () => {
+    await store.updateSnapshot('missing', () => null);
+    expect(await store.getSnapshot('missing')).toBeNull();
+  });
+});
+
 describe('updateAddressRules', () => {
   it('patches rules and returns the updated address; null when missing', async () => {
     const a = await store.addAddress({

@@ -151,9 +151,20 @@ export async function checkAddress(
 
     const alerts = evaluate({ address, prev, balances, txs });
 
-    await store.saveSnapshot(
-      buildSnapshot(address, checkedAt, balances, txs, prev),
-    );
+    // Write atomically and union seen hashes with whatever a concurrent webhook
+    // may have added since we read `prev`, so neither writer drops the other's
+    // hashes. Fresh balances from this poll are authoritative.
+    await store.updateSnapshot(address.id, (cur) => {
+      const base = buildSnapshot(address, checkedAt, balances, txs, prev);
+      const seenTxHashes = Array.from(
+        new Set([...base.seenTxHashes, ...(cur?.seenTxHashes ?? [])]),
+      ).slice(0, MAX_SEEN_HASHES);
+      return {
+        ...base,
+        seenTxHashes,
+        lastTs: Math.max(base.lastTs, cur?.lastTs ?? 0),
+      };
+    });
 
     return {
       ...base,

@@ -24,6 +24,22 @@ describe('buildTrc20Meta', () => {
   it('skips rows without a contract address', () => {
     expect(buildTrc20Meta([{ token_info: { symbol: 'X' } }, {}]).size).toBe(0);
   });
+
+  it('lets a later complete row correct an earlier fallback row', () => {
+    const meta = buildTrc20Meta([
+      { token_info: { address: JST } }, // partial: no symbol/decimals -> fallback 6dp
+      { token_info: { address: JST, symbol: 'JST', decimals: 18 } }, // complete
+    ]);
+    expect(meta.get(JST)).toEqual({ symbol: 'JST', decimals: 18 });
+  });
+
+  it('does not let a later partial row downgrade a complete row', () => {
+    const meta = buildTrc20Meta([
+      { token_info: { address: JST, symbol: 'JST', decimals: 18 } }, // complete
+      { token_info: { address: JST } }, // partial -> must not override
+    ]);
+    expect(meta.get(JST)).toEqual({ symbol: 'JST', decimals: 18 });
+  });
 });
 
 describe('resolveTrc20Balances', () => {

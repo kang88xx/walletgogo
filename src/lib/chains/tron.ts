@@ -65,14 +65,21 @@ export function buildTrc20Meta(
   transfers: Array<{ token_info?: { symbol?: string; decimals?: number; address?: string } }>,
 ): Map<string, Trc20Meta> {
   const meta = new Map<string, Trc20Meta>();
+  const complete = new Set<string>(); // contracts with real symbol + decimals
   for (const t of transfers) {
     const info = t.token_info;
     const contract = info?.address;
-    if (!contract || meta.has(contract)) continue;
+    if (!contract) continue;
+    // Once we have a complete row for a contract, don't let a later partial row
+    // (missing symbol/decimals) downgrade it — wrong decimals mis-scale balances.
+    if (complete.has(contract)) continue;
+    const isComplete = Boolean(info?.symbol) && typeof info?.decimals === 'number';
+    if (meta.has(contract) && !isComplete) continue;
     meta.set(contract, {
-      symbol: info.symbol || contract,
-      decimals: typeof info.decimals === 'number' ? info.decimals : 6,
+      symbol: info?.symbol || contract,
+      decimals: typeof info?.decimals === 'number' ? info.decimals : 6,
     });
+    if (isComplete) complete.add(contract);
   }
   return meta;
 }

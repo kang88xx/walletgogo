@@ -50,6 +50,16 @@ export interface Store {
   ): Promise<WatchedAddress | null>;
   getSnapshot(addressId: string): Promise<Snapshot | null>;
   saveSnapshot(snapshot: Snapshot): Promise<void>;
+  /**
+   * Atomically read-modify-write a snapshot in a single critical section so
+   * concurrent writers (poll + webhook) can't clobber each other. `merge`
+   * receives the current snapshot (or null) and returns the next one, or null
+   * to leave it unchanged.
+   */
+  updateSnapshot(
+    addressId: string,
+    merge: (prev: Snapshot | null) => Snapshot | null,
+  ): Promise<void>;
   /** Most-recent-first persisted alerts (optionally limited). */
   listAlerts(limit?: number): Promise<StoredAlert[]>;
   /**

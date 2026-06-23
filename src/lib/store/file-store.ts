@@ -146,6 +146,19 @@ export function createFileStore(dataFile: string = defaultDataFile()): Store {
       });
     },
 
+    updateSnapshot(
+      addressId: string,
+      merge: (prev: Snapshot | null) => Snapshot | null,
+    ): Promise<void> {
+      return enqueue(async () => {
+        const data = await load();
+        const next = merge(data.snapshots[addressId] ?? null);
+        if (next === null) return; // no-op
+        data.snapshots[addressId] = next;
+        await flush();
+      });
+    },
+
     listAlerts(limit?: number): Promise<StoredAlert[]> {
       return enqueue(async () => {
         const data = await load();
