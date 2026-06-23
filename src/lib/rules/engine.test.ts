@@ -261,4 +261,63 @@ describe('evaluate — approval', () => {
     });
     expect(alerts.filter((x) => x.rule === 'approval')).toHaveLength(0);
   });
+
+  it('downgrades a known-safe router approval to warn and notes it', () => {
+    const prev = snap({ seenTxHashes: ['0xold'] });
+    const alerts = evaluate({
+      address: addr(),
+      prev,
+      balances: noBalances,
+      txs: [
+        tx({
+          hash: '0xsafe',
+          type: 'approval',
+          amount: 0,
+          spender: '0x1111111254eeb25477b68fb85ed929f73a960582', // 1inch v5
+        }),
+      ],
+    });
+    const ap = alerts.find((x) => x.rule === 'approval');
+    expect(ap?.severity).toBe('warn');
+    expect(ap?.message).toContain('알려진 라우터');
+  });
+
+  it('keeps a known-safe router at critical when the approval is unlimited', () => {
+    const prev = snap({ seenTxHashes: ['0xold'] });
+    const alerts = evaluate({
+      address: addr(),
+      prev,
+      balances: noBalances,
+      txs: [
+        tx({
+          hash: '0xsafeunl',
+          type: 'approval',
+          amount: 0,
+          spender: '0x1111111254eeb25477b68fb85ed929f73a960582',
+          unlimited: true,
+        }),
+      ],
+    });
+    expect(alerts.find((x) => x.rule === 'approval')?.severity).toBe('critical');
+  });
+
+  it('flags an env-blocklisted spender as a malicious critical alert', () => {
+    const evil = '0xdeadbeef00000000000000000000000000000000';
+    process.env.MALICIOUS_SPENDERS = evil;
+    try {
+      const prev = snap({ seenTxHashes: ['0xold'] });
+      const alerts = evaluate({
+        address: addr(),
+        prev,
+        balances: noBalances,
+        txs: [tx({ hash: '0xevil', type: 'approval', amount: 0, spender: evil })],
+      });
+      const ap = alerts.find((x) => x.rule === 'approval');
+      expect(ap?.severity).toBe('critical');
+      expect(ap?.title).toContain('악성');
+      expect(ap?.message).toContain('악성');
+    } finally {
+      delete process.env.MALICIOUS_SPENDERS;
+    }
+  });
 });

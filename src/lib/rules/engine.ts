@@ -1,4 +1,5 @@
 import type { BalanceSnapshot, NormalizedTx } from '@/lib/chains/types';
+import { reputationOf } from '@/lib/security/spender-reputation';
 import type { Snapshot, WatchedAddress } from '@/lib/store/types';
 import type { Alert } from './types';
 
@@ -117,6 +118,7 @@ export function evaluate({ address, prev, balances, txs }: EvaluateInput): Alert
       (tx.type === 'approval' || tx.type === 'nft_approval')
     ) {
       const isNft = tx.type === 'nft_approval';
+      const reputation = reputationOf(tx.spender);
       const spenderPart = tx.spender
         ? ` spender ${tx.spender.slice(0, 10)}…${tx.spender.slice(-6)}`
         : '';
@@ -125,19 +127,32 @@ export function evaluate({ address, prev, balances, txs }: EvaluateInput): Alert
           ? ' — 전체 컬렉션 위임(setApprovalForAll)!'
           : ' — 무제한(unlimited) 승인!'
         : '';
+      // A grant to a known router is routine; an unknown one warrants attention;
+      // a blocklisted one is an active drainer signal.
+      const repPart =
+        reputation === 'malicious'
+          ? ' 🚨 알려진 악성 spender!'
+          : reputation === 'safe'
+            ? ' (알려진 라우터)'
+            : ' 알 수 없는 spender — 검증하세요.';
+      // Known-safe routers are routine grants → warn; unknown/malicious → critical.
+      const severity = reputation === 'safe' && !tx.unlimited ? 'warn' : 'critical';
+      const baseTitle = isNft ? 'NFT 승인' : '토큰 승인';
+      const title =
+        reputation === 'malicious'
+          ? `🚨 악성 spender ${baseTitle} 감지`
+          : tx.unlimited
+            ? isNft
+              ? '⚠️ NFT 전체 위임 감지'
+              : '⚠️ 무제한 토큰 승인 감지'
+            : `${baseTitle} 감지`;
       alerts.push({
         ...base,
         dedupKey: `${address.id}:approval:${tx.hash}`,
         rule: 'approval',
-        severity: 'critical',
-        title: tx.unlimited
-          ? isNft
-            ? '⚠️ NFT 전체 위임 감지'
-            : '⚠️ 무제한 토큰 승인 감지'
-          : isNft
-            ? 'NFT 승인 감지'
-            : '토큰 승인 감지',
-        message: `승인(approval) 트랜잭션 감지${unlimitedPart}${spenderPart}. 드레이너 위험을 확인하세요 — ${tx.hash.slice(
+        severity,
+        title,
+        message: `승인(approval) 트랜잭션 감지${unlimitedPart}${spenderPart}.${repPart} — ${tx.hash.slice(
           0,
           12,
         )}…`,

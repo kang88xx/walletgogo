@@ -48,7 +48,50 @@ interface Trc20Transfer {
   to: string;
   value: string;
   block_timestamp: number;
-  token_info?: { symbol?: string; decimals?: number };
+  token_info?: { symbol?: string; decimals?: number; address?: string };
+}
+
+export interface Trc20Meta {
+  symbol: string;
+  decimals: number;
+}
+
+/**
+ * Build a contract-address -> {symbol, decimals} map from TRC20 transfer rows.
+ * TronGrid's transfer feed carries token_info; the account balance feed does
+ * not, so we cross-reference to label balances properly.
+ */
+export function buildTrc20Meta(
+  transfers: Array<{ token_info?: { symbol?: string; decimals?: number; address?: string } }>,
+): Map<string, Trc20Meta> {
+  const meta = new Map<string, Trc20Meta>();
+  for (const t of transfers) {
+    const info = t.token_info;
+    const contract = info?.address;
+    if (!contract || meta.has(contract)) continue;
+    meta.set(contract, {
+      symbol: info.symbol || contract,
+      decimals: typeof info.decimals === 'number' ? info.decimals : 6,
+    });
+  }
+  return meta;
+}
+
+/** Resolve account TRC20 balance entries into labeled snapshots using meta. */
+export function resolveTrc20Balances(
+  entries: Array<Record<string, string>>,
+  meta: Map<string, Trc20Meta>,
+): BalanceSnapshot[] {
+  const out: BalanceSnapshot[] = [];
+  for (const entry of entries) {
+    for (const [contract, raw] of Object.entries(entry)) {
+      const m = meta.get(contract);
+      const decimals = m?.decimals ?? 6; // most TRC20 use 6
+      const amount = rawToUnits(raw, decimals);
+      if (amount > 0) out.push({ asset: m?.symbol ?? contract, amount });
+    }
+  }
+  return out;
 }
 
 interface NativeTxContract {
@@ -102,16 +145,20 @@ export function createTronAdapter(): ChainAdapter {
         { asset: 'TRX', amount: (account?.balance ?? 0) / SUN_PER_TRX },
       ];
 
-      // TRC20 balances arrive as an array of { contractAddress: rawBalance } maps.
-      // We don't have decimals/symbol here, so report under the contract address.
-      // TODO: resolve symbol + decimals per contract for nicer balance labels.
-      if (Array.isArray(account?.trc20)) {
-        for (const entry of account!.trc20) {
-          for (const [contract, raw] of Object.entries(entry)) {
-            const amount = rawToUnits(raw, 6); // assume 6 decimals (most TRC20)
-            if (amount > 0) out.push({ asset: contract, amount });
-          }
+      // TRC20 balances arrive as { contractAddress: rawBalance } maps with no
+      // metadata. Cross-reference the transfer feed (which carries token_info)
+      // to label them with real symbol + decimals; degrade to contract + 6dp.
+      if (Array.isArray(account?.trc20) && account!.trc20.length > 0) {
+        let meta = new Map<string, Trc20Meta>();
+        try {
+          const transfers = await getJson<ListResp<Trc20Transfer>>(
+            `/v1/accounts/${address}/transactions/trc20?limit=50`,
+          );
+          meta = buildTrc20Meta(transfers.data ?? []);
+        } catch {
+          // metadata fetch failed — fall back to contract-address labels
         }
+        out.push(...resolveTrc20Balances(account!.trc20, meta));
       }
       return out;
     },
