@@ -35,4 +35,10 @@ export interface Alert {
   title: string;
   message: string;
   tx?: NormalizedTx;
+  /**
+   * Deterministic identity for an alert *event*. Two runs that observe the same
+   * underlying event (same tx + rule, or same balance state) produce the same
+   * key, so persistence and notification can dedup. Set by the rule engine.
+   */
+  dedupKey: string;
 }

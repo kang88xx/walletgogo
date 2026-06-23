@@ -2,7 +2,13 @@ import { getAdapter } from '@/lib/chains';
 import { ChainError, type BalanceSnapshot, type NormalizedTx } from '@/lib/chains/types';
 import { evaluate } from '@/lib/rules/engine';
 import type { Alert } from '@/lib/rules/types';
-import type { Snapshot, Store, WatchedAddress } from '@/lib/store/types';
+import type {
+  Snapshot,
+  StoredAlert,
+  Store,
+  WatchedAddress,
+} from '@/lib/store/types';
+import { getNotifier, type Notifier } from '@/lib/notify';
 
 /** Cap on tx hashes retained per snapshot so the JSON file can't grow forever. */
 const MAX_SEEN_HASHES = 500;
@@ -25,7 +31,10 @@ export interface AddressCheckResult {
 export interface CheckRunResult {
   checkedAt: number;
   results: AddressCheckResult[];
+  /** All alerts produced this run (including ones already seen before). */
   alerts: Alert[];
+  /** Alerts newly persisted this run (deduped) — the set worth notifying on. */
+  newAlerts: StoredAlert[];
 }
 
 function buildSnapshot(
@@ -110,7 +119,10 @@ export async function checkAddress(
  * failing chain never aborts the run), and all addresses are checked
  * concurrently.
  */
-export async function runCheck(store: Store): Promise<CheckRunResult> {
+export async function runCheck(
+  store: Store,
+  notifier: Notifier = getNotifier(),
+): Promise<CheckRunResult> {
   const checkedAt = Math.floor(Date.now() / 1000);
   const addresses = await store.listAddresses();
 
@@ -119,5 +131,17 @@ export async function runCheck(store: Store): Promise<CheckRunResult> {
   );
 
   const alerts = results.flatMap((r) => r.alerts);
-  return { checkedAt, results, alerts };
+  // Persist only newly-seen alerts (deduped by dedupKey) so history doesn't
+  // bloat and downstream notifiers fire exactly once per real event.
+  const newAlerts = await store.appendAlerts(alerts, checkedAt);
+  // Notify on exactly the newly-persisted alerts. Never let delivery failures
+  // surface into the run result.
+  if (newAlerts.length > 0) {
+    try {
+      await notifier.dispatch(newAlerts);
+    } catch {
+      // notifier.dispatch is already failure-isolated; this is belt-and-braces.
+    }
+  }
+  return { checkedAt, results, alerts, newAlerts };
 }

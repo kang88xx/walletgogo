@@ -46,6 +46,7 @@ export function evaluate({ address, prev, balances, txs }: EvaluateInput): Alert
         const delta = bal.amount - old;
         alerts.push({
           ...base,
+          dedupKey: `${address.id}:balance_change:${bal.asset}:${bal.amount}`,
           rule: 'balance_change',
           severity: delta < 0 ? 'warn' : 'info',
           title: `잔액 변동: ${bal.asset}`,
@@ -65,6 +66,7 @@ export function evaluate({ address, prev, balances, txs }: EvaluateInput): Alert
     if (rules.newTransaction && isNew) {
       alerts.push({
         ...base,
+        dedupKey: `${address.id}:new_transaction:${tx.hash}`,
         rule: 'new_transaction',
         severity: 'info',
         title: '새 트랜잭션 감지',
@@ -82,6 +84,7 @@ export function evaluate({ address, prev, balances, txs }: EvaluateInput): Alert
     ) {
       alerts.push({
         ...base,
+        dedupKey: `${address.id}:large_withdrawal:${tx.hash}`,
         rule: 'large_withdrawal',
         severity: 'critical',
         title: '대규모 출금 감지',
@@ -95,6 +98,7 @@ export function evaluate({ address, prev, balances, txs }: EvaluateInput): Alert
     if (rules.approval && (tx.type === 'approval' || tx.type === 'nft_approval')) {
       alerts.push({
         ...base,
+        dedupKey: `${address.id}:approval:${tx.hash}`,
         rule: 'approval',
         severity: 'critical',
         title: tx.type === 'nft_approval' ? 'NFT 승인 감지' : '토큰 승인 감지',

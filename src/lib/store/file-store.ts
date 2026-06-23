@@ -1,21 +1,28 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import type { Alert, AlertRuleConfig } from '@/lib/rules/types';
 import { DEFAULT_RULES } from '@/lib/rules/types';
 import type {
   AddAddressInput,
   Snapshot,
+  StoredAlert,
   Store,
   WatchedAddress,
 } from './types';
+
+/** Hard cap on persisted alert history so the JSON file stays bounded. */
+const ALERT_CAP = 1000;
 
 interface PersistShape {
   addresses: WatchedAddress[];
   /** addressId -> latest snapshot */
   snapshots: Record<string, Snapshot>;
+  /** Persisted alert history, newest-first. */
+  alerts: StoredAlert[];
 }
 
-const EMPTY: PersistShape = { addresses: [], snapshots: {} };
+const EMPTY: PersistShape = { addresses: [], snapshots: {}, alerts: [] };
 
 function defaultDataFile(): string {
   return process.env.WALLET_GOGO_DATA_FILE || join(process.cwd(), '.data', 'wallet-gogo.json');
@@ -47,11 +54,12 @@ export function createFileStore(dataFile: string = defaultDataFile()): Store {
           parsed.snapshots && typeof parsed.snapshots === 'object'
             ? parsed.snapshots
             : {},
+        alerts: Array.isArray(parsed.alerts) ? parsed.alerts : [],
       };
     } catch (err) {
       // Missing file on first run is expected; anything else we surface.
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-        cache = { ...EMPTY, addresses: [], snapshots: {} };
+        cache = { addresses: [], snapshots: {}, alerts: [] };
       } else {
         throw err;
       }
@@ -109,6 +117,20 @@ export function createFileStore(dataFile: string = defaultDataFile()): Store {
       });
     },
 
+    updateAddressRules(
+      id: string,
+      rules: AlertRuleConfig,
+    ): Promise<WatchedAddress | null> {
+      return enqueue(async () => {
+        const data = await load();
+        const entry = data.addresses.find((a) => a.id === id);
+        if (!entry) return null;
+        entry.rules = rules;
+        await flush();
+        return entry;
+      });
+    },
+
     getSnapshot(addressId: string): Promise<Snapshot | null> {
       return enqueue(async () => {
         const data = await load();
@@ -120,6 +142,45 @@ export function createFileStore(dataFile: string = defaultDataFile()): Store {
       return enqueue(async () => {
         const data = await load();
         data.snapshots[snapshot.addressId] = snapshot;
+        await flush();
+      });
+    },
+
+    listAlerts(limit?: number): Promise<StoredAlert[]> {
+      return enqueue(async () => {
+        const data = await load();
+        return typeof limit === 'number'
+          ? data.alerts.slice(0, limit)
+          : [...data.alerts];
+      });
+    },
+
+    appendAlerts(alerts: Alert[], firedAt: number): Promise<StoredAlert[]> {
+      return enqueue(async () => {
+        const data = await load();
+        const seen = new Set(data.alerts.map((a) => a.dedupKey));
+        const inserted: StoredAlert[] = [];
+        for (const alert of alerts) {
+          if (seen.has(alert.dedupKey)) continue;
+          seen.add(alert.dedupKey);
+          inserted.push({ ...alert, id: randomUUID(), firedAt, read: false });
+        }
+        if (inserted.length > 0) {
+          // newest-first, then cap
+          data.alerts = [...inserted, ...data.alerts].slice(0, ALERT_CAP);
+          await flush();
+        }
+        return inserted;
+      });
+    },
+
+    markAlertsRead(ids?: string[]): Promise<void> {
+      return enqueue(async () => {
+        const data = await load();
+        const idSet = ids ? new Set(ids) : null;
+        for (const alert of data.alerts) {
+          if (!idSet || idSet.has(alert.id)) alert.read = true;
+        }
         await flush();
       });
     },
