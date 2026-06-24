@@ -53,7 +53,7 @@
 ```
 src/lib/chains/      체인 어댑터 + 레지스트리 (공통 ChainAdapter 인터페이스)
 src/lib/rules/       순수 알림 평가 엔진 + dedupKey + sanitizeRules
-src/lib/store/       Store 인터페이스 + 파일 구현 (주소·스냅샷·알림 히스토리)
+src/lib/store/       Store 인터페이스 + 파일/Upstash Redis 구현 (주소·스냅샷·알림 히스토리)
 src/lib/prices/      CoinGecko USD 가격 (TTL 캐시)
 src/lib/notify/      pluggable 알림 채널 + 채널별 심각도 라우팅
 src/lib/scheduler/   백그라운드 폴링 스케줄러
@@ -92,7 +92,8 @@ RPC(`ETHEREUM_RPC_URL` 등)와 `ETHERSCAN_API_KEY` 설정을 권장합니다.
 | `MALICIOUS_SPENDERS` | 악성 spender 블록리스트 (쉼표 구분) |
 | `ALCHEMY_WEBHOOK_SIGNING_KEY` | Alchemy 웹훅 서명 검증 → `POST /api/webhooks/alchemy` |
 | `HELIUS_WEBHOOK_SECRET` | Helius 웹훅 시크릿 → `POST /api/webhooks/helius` |
-| `WALLET_GOGO_DATA_FILE` | 스토어 파일 경로 (기본 `./.data/wallet-gogo.json`) |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | 설정 시 Upstash Redis를 영속 스토어로 사용 (서버리스/Vercel 권장). `KV_REST_API_URL` / `KV_REST_API_TOKEN` 별칭도 허용 |
+| `WALLET_GOGO_DATA_FILE` | (Redis 미설정 시) 로컬 JSON 스토어 파일 경로 (기본 `./.data/wallet-gogo.json`) |
 
 ## 검증
 
